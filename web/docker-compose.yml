@@ -1,0 +1,58 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: mrf700-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: mrf700
+      POSTGRES_USER: mrf700
+      POSTGRES_PASSWORD: mrf700pass
+    volumes:
+      - mrf700_pgdata:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - mrf700-net
+    # PostgreSQL hanya di internal network, tidak expose ke host
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mrf700-backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://mrf700:mrf700pass@db:5432/mrf700
+      PORT: 3501
+      TCP_PORT: 9088
+      NODE_ENV: production
+    ports:
+      - "3501:3501"    # REST API + WebSocket
+      - "9088:9088"    # TCP server (terima packet dari device)
+    depends_on:
+      - db
+    networks:
+      - mrf700-net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: mrf700-frontend
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3501
+      NEXT_PUBLIC_WS_URL: ws://localhost:3501
+      PORT: 3500
+    ports:
+      - "3500:3500"    # Web dashboard
+    depends_on:
+      - backend
+    networks:
+      - mrf700-net
+
+volumes:
+  mrf700_pgdata:
+
+networks:
+  mrf700-net:
+    driver: bridge
